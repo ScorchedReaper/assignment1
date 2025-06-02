@@ -1,0 +1,187 @@
+# eliza.py
+import re
+import random
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+
+# NLTK setup
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('stopwords')
+lemmatizer = WordNetLemmatizer()
+stop_words = set(stopwords.words('english'))
+
+# Keywords
+quit_commands = {
+    "quit", "exit", "bye", "stop", "off", "signing off",
+    "that's it bye", "goodbye", "leave", "end"
+}
+no_responses = {
+    "no", "nah", "nope", "not really", "nothing else",
+    "i'm done", "nothing more"
+}
+greeting_keywords = {
+    "hi", "hello", "hey", "greetings", "good morning", "good evening"
+}
+
+# Safe input (handles global quit)
+def safe_input(prompt):
+    response = input(prompt).strip()
+    if response.lower() in quit_commands:
+        print("[Eliza] Goodbye. Take care of yourself.")
+        exit()
+    return response
+
+# Preprocess input
+def process_words(user_input):
+    tokens = word_tokenize(user_input.lower())
+    lem_tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    return lem_tokens
+
+# Emotion detection
+def get_emotion():
+    print("How are you feeling today?")
+    emotion_keywords = {
+        "happy": ["happy", "joyful", "cheerful", "glad", "excited", "content", "pleased", "satisfied"],
+        "sad": ["sad", "depressed", "down", "miserable", "unhappy", "blue", "gloomy", "tearful"],
+        "fear": ["fear", "afraid", "scared", "anxious", "nervous", "worried", "panicked", "tense"],
+        "anger": ["angry", "mad", "furious", "enraged", "irritated", "annoyed", "frustrated",
+                  "livid", "fuming", "upset", "pissed", "hostile", "resentful"],
+        "disgust": ["disgusted", "grossed out", "revolted", "repulsed", "nauseated", "sickened", "vile", "filthy", "offended"]
+    }
+
+    while True:
+        user_input = safe_input("Your response: ").lower()
+        for emotion, keywords in emotion_keywords.items():
+            if any(re.search(rf"\b{word}\b", user_input) for word in keywords):
+                return emotion
+        print("I'm sorry, I couldn't quite understand. Could you describe how you're feeling again?")
+
+# User name and gender
+def user_info():
+    name = safe_input("What's your name? ")
+    while True:
+        gender = safe_input("What's your gender? (Male/M, Female/F, Others): ").lower()
+        if gender in ['male', 'm']:
+            return name, "Male"
+        elif gender in ['female', 'f']:
+            return name, "Female"
+        elif gender == 'others':
+            return name, "Others"
+        print("Please enter Male, M, Female, F, or Others.")
+
+# Emotion intros
+emote_responses = {
+    "happy": "Glad to hear! Tell me more about what’s making you feel this way.",
+    "sad": "I'm sorry to hear that. What's been bothering you?",
+    "fear": "I'm sorry to hear that. What’s making you feel so anxious?",
+    "anger": "Let’s try to work through that anger. What happened?",
+    "disgust": "Disgust is a strong reaction. Want to talk about what triggered it?"
+}
+
+# Emotion regex responses
+emote_regex = {
+    "anger": [
+        (r".*\b(hello|hi|greetings)\b.*", "Hello, {name}. What’s been making you angry lately?"),
+        (r".*\bI need help\b.*", "I'm here to help you, {name}. Tell me what’s been bothering you."),
+        (r".*\b(angry|mad|furious|fuming|livid|pissed off)\b.*", "You seem very angry, {name}. What triggered this?"),
+        (r".*\b(irritated|annoyed|frustrated|agitated|fed up|snappy)\b.*", "That sounds frustrating, {name}. Want to talk about it?"),
+        (r".*\b(boiling|rage|raging|exploding)\b.*", "It sounds like your emotions are really intense, {name}. Want to share more?"),
+        (r".*\b(clenched fists|gritted teeth|tight jaw|heart racing)\b.*", "What was happening when you felt that way, {name}?"),
+        (r".*\b(hate|hating|detest|loathe|can't stand)\b.*", "Tell me more about these strong feelings, {name}."),
+        (r".*\b(betrayed|lied to|cheated|used|manipulated|backstabbed)\b.*", "I can understand why you'd be upset, {name}. Want to talk more about that?"),
+        (r".*\b(insulted|disrespected|mocked|offended|humiliated)\b.*", "That must have hurt, {name}. Do you want to talk about it?"),
+        (r".*\b(resent|revenge|retaliate|get back at)\b.*", "Those are powerful thoughts, {name}. What led you here?"),
+        (r".*\b(jerk|idiot|liar|moron|abuser|toxic)\b.*", "It seems like someone really upset you, {name}. Want to share what happened?"),
+        (r".*\b(fight|argue|shouting match|screamed|yelled)\b.*", "It sounds like you had a conflict, {name}. What was that about?"),
+        (r".*\b(traffic|driver|cut me off)\b.*", "Driving can be stressful. Tell me what happened, {name}."),
+        (r".*\b(boss|manager|supervisor|coworker)\b.*", "Work relationships can be tough. What’s going on there, {name}?")
+    ],
+    "disgust": [
+        (r".*\b(hello|hi|greetings)\b.*", "Hello, {name}. What’s been making you feel disgusted lately?"),
+        (r".*\b(disgusted|grossed out|revolted|repulsed|nauseated|sickened)\b.*", "That sounds deeply unpleasant, {name}. What caused this reaction?"),
+        (r".*\b(can’t stand the smell|made me gag|turned my stomach|made me sick)\b.*", "That’s quite a reaction, {name}. Want to talk more about it?"),
+        (r".*\b(vomit|throw up|barf|retch)\b.*", "It sounds like that situation had a physical impact. Tell me what happened, {name}."),
+        (r".*\b(unclean|filthy|dirty|rotten|moldy|infested)\b.*", "Those conditions would make anyone uncomfortable. Can you tell me more, {name}?"),
+        (r".*\b(disrespectful|morally wrong|inhuman|vile|evil)\b.*", "That sounds like it really went against your values, {name}. What about it bothered you most?"),
+        (r".*\b(chewed|spat|licked|slobbered|bodily fluids)\b.*", "That's quite graphic, {name}. Want to share more about what happened?"),
+        (r".*\b(decay|maggots|pus|blood|wounds|infection)\b.*", "That’s very intense. It must have been hard to witness. Do you want to talk about it, {name}?"),
+        (r".*\b(violated|crossed a line|unacceptable)\b.*", "That definitely sounds like something that disturbed you, {name}. Would you like to talk more about it?"),
+        (r".*\b(sexist|racist|homophobic|bigoted|hateful)\b.*", "That behavior sounds very upsetting, {name}. Want to talk about what you saw or heard?"),
+        (r".*\b(slimy|sticky|oozing|smelly|stench)\b.*", "Those kinds of sensations can be overwhelming, {name}. Want to unpack it a bit?")
+    ]
+}
+
+# Match input to pattern
+def emote_response(emotion, user_input, name):
+    patterns = emote_regex.get(emotion, [])
+    for pattern, response in patterns:
+        if re.search(pattern, user_input.lower()):
+            return response.format(name=name)
+    return "Tell me more about that."
+
+# Fallbacks
+fallback_responses = [
+    "I'm not sure I understand. Could you say that another way?",
+    "Can you clarify what you mean?",
+    "That was a bit unclear. Want to rephrase?",
+    "Hmm, I didn’t quite get that. Can you explain it differently?"
+]
+
+# Main
+def eliza():
+    print("[Eliza] Hi, I'm Eliza, a Rogerian Psychotherapist.")
+    name, gender = user_info()
+    emotion = get_emotion()
+    print(f"[Eliza] {emote_responses[emotion]}")
+
+    gibberish_count = 0
+    max_gibberish = 2
+    last_input = ""
+
+    while True:
+        user_input = safe_input(f"[{name}] ")
+
+        if user_input.strip() == "":
+            print("[Eliza] You didn’t say anything. I’m here when you're ready.")
+            continue
+
+        if user_input == last_input:
+            print(f"[Eliza] You mentioned that already, {name}. Would you like to add more?")
+            follow_up = safe_input("> ").strip().lower()
+            if follow_up in quit_commands:
+                print(f"[Eliza] Alright, {name}. Take care and be kind to yourself.")
+                break
+            elif follow_up in no_responses:
+                print(f"[Eliza] Okay. Would you like to end our session or talk about something else?")
+                choice = safe_input("> ").strip().lower()
+                if choice in quit_commands or choice in no_responses:
+                    print(f"[Eliza] Goodbye, {name}. Wishing you well.")
+                    break
+                else:
+                    print(f"[Eliza] Alright, let’s continue then.")
+                    continue
+            else:
+                user_input = follow_up
+
+        last_input = user_input
+
+        if user_input.lower() in greeting_keywords:
+            print(f"[Eliza] Hello again, {name}. How are you feeling now?")
+            continue
+
+        response = emote_response(emotion, user_input, name)
+
+        if response == "Tell me more about that.":
+            gibberish_count += 1
+            if gibberish_count >= max_gibberish:
+                response = random.choice(fallback_responses)
+        else:
+            gibberish_count = 0
+
+        print(f"[Eliza] {response}")
+
+if __name__ == "__main__":
+    eliza()
